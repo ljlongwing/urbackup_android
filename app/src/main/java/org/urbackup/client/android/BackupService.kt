@@ -121,6 +121,8 @@ class BackupService : Service() {
                         Log.i(TAG, "start backup: $r")
                         if (r == "OK" || r == "RUNNING") {
                             backupRequested = false
+                            // a small backup can be over before the next status poll sees it
+                            sawBackup = true
                             lastActivity = now
                         }
                     }
