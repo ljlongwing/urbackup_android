@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -110,6 +111,10 @@ fun HomeScreen(resumeCount: Int, onOpenSettings: () -> Unit) {
     }
 }
 
+/** Green for "backed up"; a lighter one on dark backgrounds. */
+@Composable
+private fun okColor(): Color = if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
+
 /** Missing permissions and warnings, each with what to do about it. */
 @Composable
 private fun ProblemCards(resumeCount: Int, warning: String) {
@@ -207,8 +212,16 @@ private fun StatusCard(session: SessionState, history: History, nextRun: Long?, 
     Card(Modifier.fillMaxWidth(), colors = colors) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (running) {
+                val done = session.phase == Phase.CONNECTED && session.backupDone
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (session.phase != Phase.BACKING_UP) {
+                    if (done) {
+                        Icon(
+                            if (session.backupFailed) Icons.Filled.Warning else Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = if (session.backupFailed) MaterialTheme.colorScheme.error else okColor()
+                        )
+                        Spacer(Modifier.width(12.dp))
+                    } else if (session.phase != Phase.BACKING_UP) {
                         CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
                         Spacer(Modifier.width(12.dp))
                     }
@@ -237,19 +250,24 @@ private fun StatusCard(session: SessionState, history: History, nextRun: Long?, 
                 }
                 if (session.phase == Phase.CONNECTED) {
                     Text(
-                        if (session.stayConnectedUntil > now) "Waiting for restores from the server."
-                        else "The server checks whether a backup is due.",
+                        when {
+                            session.stayConnectedUntil > now -> "Waiting for restores from the server."
+                            done -> "Disconnecting shortly, in case the server starts another backup first."
+                            else -> "The server decides whether a backup is due."
+                        },
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                OutlinedButton(onClick = { BackupService.stop(context) }) { Text("Stop") }
+                OutlinedButton(onClick = { BackupService.stop(context) }) {
+                    Text(if (session.phase == Phase.CONNECTED && (session.backupDone || session.stayConnectedUntil > now)) "Disconnect now" else "Stop")
+                }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         if (problem) Icons.Filled.Warning else if (history.lastBackupTime > 0) Icons.Filled.CheckCircle else Icons.Filled.Info,
                         contentDescription = null,
                         tint = if (problem) MaterialTheme.colorScheme.error
-                        else if (history.lastBackupTime > 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                        else if (history.lastBackupTime > 0) okColor() else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
@@ -326,7 +344,7 @@ private fun FoldersCard(
                         s != null && !s.exists -> "Not backed up: the folder does not exist" to MaterialTheme.colorScheme.error
                         session.phase == Phase.BACKING_UP -> "Backing up…" to MaterialTheme.colorScheme.primary
                         history.lastBackupTime > 0 && f in history.foldersAtLastBackup ->
-                            "Backed up ${Format.ago(history.lastBackupTime)}" to Color(0xFF2E7D32)
+                            "Backed up ${Format.ago(history.lastBackupTime)}" to okColor()
                         else -> "Not backed up yet" to MaterialTheme.colorScheme.onSurfaceVariant
                     }
                     Text(text, style = MaterialTheme.typography.bodySmall, color = color)

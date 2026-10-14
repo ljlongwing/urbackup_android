@@ -33,6 +33,9 @@ data class SessionState(
     val speedBpms: Double = 0.0,
     val etaMs: Long = -1,
     val stayConnectedUntil: Long = 0,
+    /** A backup ran in this session and is over; the session only waits a bit before it ends. */
+    val backupDone: Boolean = false,
+    val backupFailed: Boolean = false,
 ) {
     val running: Boolean get() = phase != Phase.IDLE
 }

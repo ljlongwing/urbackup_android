@@ -58,7 +58,11 @@ object Format {
         Phase.STARTING -> "Starting…"
         Phase.CONNECTING -> if (s.serverAddress.isNotEmpty()) "Connecting to ${s.serverAddress}…" else "Connecting to the server…"
         Phase.WAITING_FOR_SERVER -> "Waiting for the server…"
-        Phase.CONNECTED -> "Connected to the server"
+        Phase.CONNECTED -> when {
+            s.backupDone && s.backupFailed -> "Backup failed"
+            s.backupDone -> "Backup finished"
+            else -> "Checking with the server…"
+        }
         Phase.BACKING_UP -> backupTitle(s.action)
     }
 

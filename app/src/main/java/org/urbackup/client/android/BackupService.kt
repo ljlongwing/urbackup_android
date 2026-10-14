@@ -218,15 +218,19 @@ class BackupService : Service() {
                         speedBpms = proc?.optDouble("speed_bpms", 0.0) ?: 0.0,
                         etaMs = proc?.optLong("eta_ms", -1) ?: -1,
                         stayConnectedUntil = stayConnectedUntil,
+                        backupDone = sawBackup && proc == null,
+                        backupFailed = backupFailed,
                     )
                     BackupState.update { s }
                     updateNotification(s)
 
                     val busy = proc != null || backupRequested || now < stayConnectedUntil
                     if (!busy) {
-                        if (serverReady && now - readySince > IDLE_AFTER_CONNECT_MS
-                            && (lastActivity == 0L || now - lastActivity > IDLE_AFTER_BACKUP_MS)
-                        ) {
+                        // after a backup only a short wait (the server may start another one, e.g. a
+                        // different group); without one, give the server time to decide
+                        val idle = if (sawBackup) now - lastActivity > IDLE_AFTER_BACKUP_MS
+                        else now - readySince > IDLE_AFTER_CONNECT_MS && (lastActivity == 0L || now - lastActivity > IDLE_AFTER_BACKUP_MS)
+                        if (serverReady && idle) {
                             when {
                                 backupFailed -> {
                                     result = "The backup failed. The server's log has the details."
@@ -398,7 +402,7 @@ class BackupService : Service() {
         /** How long to wait for the server to start a backup after it picked up the phone. */
         private const val IDLE_AFTER_CONNECT_MS = 90 * 1000L
         /** The server may start another backup (e.g. a different group) right after one finished. */
-        private const val IDLE_AFTER_BACKUP_MS = 60 * 1000L
+        private const val IDLE_AFTER_BACKUP_MS = 30 * 1000L
         private const val REQUEST_RETRY_MS = 60 * 1000L
         private const val MAX_REQUEST_ATTEMPTS = 3
         const val STAY_CONNECTED_MS = 15 * 60 * 1000L
