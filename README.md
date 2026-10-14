@@ -24,6 +24,11 @@ ready for everyday use yet.
 - The app talks to the backend over the backend's local command interface (127.0.0.1:35623),
   the same one `urbackupclientctl` and the desktop client use.
 
+The server sends its "Internet server name/IP" setting to every client, and the backend then
+uses it instead of the address entered in the app. If phones are sometimes inside and sometimes
+outside the LAN, enter all addresses there, separated by ";" (e.g. `backup.example.com;192.168.1.10`).
+The app shows a warning if the address it gets from the server does not work.
+
 Scheduled backups need the app to be exempt from battery optimization: since Android 12 an app
 may not start a foreground service from the background otherwise. The app asks for it.
 

@@ -136,10 +136,14 @@ class MainActivity : ComponentActivity() {
         val session by BackupState.session.collectAsStateWithLifecycle()
         val config = remember(resumeCount, configVersion, session.running) { AppConfig.load(this) }
         val last = remember(resumeCount, session.running) { BackupState.lastResult(this) }
+        val warning by BackupState.warning(this).collectAsStateWithLifecycle()
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Status", style = MaterialTheme.typography.titleMedium)
+                if (!warning.isNullOrEmpty()) {
+                    Text(warning!!, color = MaterialTheme.colorScheme.error)
+                }
                 if (session.running) {
                     Text(session.phase)
                     if (session.percentDone >= 0) {

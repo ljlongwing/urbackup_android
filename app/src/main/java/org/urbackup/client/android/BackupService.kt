@@ -88,8 +88,13 @@ class BackupService : Service() {
 
             val start = System.currentTimeMillis()
             var connectedSince = 0L
+            var disconnectedSince = start
             var lastActivity = 0L
             var sawBackup = false
+            var backupFailed = false
+            var requestAccepted = false
+            var addressFallbackSent = false
+            var knownFinished: Set<Long>? = null
 
             while (!stopRequested) {
                 if (!p.isAlive) {
@@ -105,9 +110,48 @@ class BackupService : Service() {
                 }
 
                 if (st != null) {
-                    val connected = st.optBoolean("internet_connected")
-                    if (connected && connectedSince == 0L) connectedSince = now
-                    if (!connected) connectedSince = 0L
+                    // internet_connected stays true while the backend fails to reconnect (e.g. to a new
+                    // address), internet_status says what is going on right now
+                    val connected = st.optBoolean("internet_connected") && st.optString("internet_status") == "connected"
+                    if (connected) {
+                        if (connectedSince == 0L) {
+                            connectedSince = now
+                            // connected with the address the server sends: the server's setting works
+                            if (backend.setting("internet_server") == backend.setting("internet_server_def")) {
+                                BackupState.setWarning(this, "")
+                            }
+                        }
+                        disconnectedSince = 0L
+                    } else {
+                        connectedSince = 0L
+                        if (disconnectedSince == 0L) disconnectedSince = now
+                    }
+
+                    // The server sends its own address to the client, which then uses it instead of the one
+                    // entered in the app. If that address does not work from here (e.g. a LAN address while
+                    // the phone is outside), go back to the app's address for this session.
+                    if (!connected && !addressFallbackSent && now - disconnectedSince > ADDRESS_FALLBACK_MS) {
+                        addressFallbackSent = true
+                        val config = AppConfig.load(this)
+                        val host = backend.setting("internet_server")
+                        val port = backend.setting("internet_server_port")
+                        if (host != config.serverHost || port != config.serverPort.toString()) {
+                            Log.w(TAG, "cannot connect to $host:$port (set by the server), trying ${config.serverHost}:${config.serverPort}")
+                            BackupState.setWarning(
+                                this,
+                                "The server tells this phone to connect to $host, which does not work from here. " +
+                                    "UrBackup went back to ${config.serverHost} for now, but the server will send its address " +
+                                    "again. In the server's settings (Internet), enter an address the phone can reach. " +
+                                    "Several addresses can be separated by \";\"."
+                            )
+                            commands.updateSettings(
+                                mapOf(
+                                    "internet_server" to config.serverHost,
+                                    "internet_server_port" to config.serverPort.toString(),
+                                )
+                            )
+                        }
+                    }
 
                     val procs = st.optJSONArray("running_processes")
                     val proc = if (procs != null && procs.length() > 0) procs.getJSONObject(0) else null
@@ -116,13 +160,33 @@ class BackupService : Service() {
                         lastActivity = now
                     }
 
+                    // a small backup can be over between two polls; it then shows up as finished
+                    val finished = st.optJSONArray("finished_processes")
+                    val finishedNow = HashMap<Long, Boolean>()
+                    if (finished != null) {
+                        for (i in 0 until finished.length()) {
+                            val f = finished.getJSONObject(i)
+                            finishedNow[f.optLong("process_id")] = f.optBoolean("success")
+                        }
+                    }
+                    val known = knownFinished
+                    if (known != null) {
+                        for ((id, success) in finishedNow) {
+                            if (id !in known) {
+                                sawBackup = true
+                                lastActivity = now
+                                if (!success) backupFailed = true
+                            }
+                        }
+                    }
+                    knownFinished = finishedNow.keys
+
                     if (backupRequested && connected) {
                         val r = try { commands.startBackup(full = false) } catch (e: Exception) { "error: ${e.message}" }
                         Log.i(TAG, "start backup: $r")
                         if (r == "OK" || r == "RUNNING") {
                             backupRequested = false
-                            // a small backup can be over before the next status poll sees it
-                            sawBackup = true
+                            requestAccepted = true
                             lastActivity = now
                         }
                     }
@@ -150,10 +214,15 @@ class BackupService : Service() {
                         if (connectedSince != 0L && now - connectedSince > IDLE_AFTER_CONNECT_MS
                             && (lastActivity == 0L || now - lastActivity > IDLE_AFTER_BACKUP_MS)
                         ) {
-                            result = if (sawBackup) "Backup finished" else "Connected, no backup was due"
+                            result = when {
+                                backupFailed -> "The backup failed. The server's log has the details."
+                                sawBackup -> "Backup finished"
+                                requestAccepted -> "The server did not start the backup"
+                                else -> "Connected, no backup was due"
+                            }
                             break
                         }
-                        if (connectedSince == 0L && now - start > CONNECT_TIMEOUT_MS) {
+                        if (!connected && now - disconnectedSince > CONNECT_TIMEOUT_MS) {
                             result = "Could not connect to the server: ${st.optString("internet_status")}"
                             break
                         }
@@ -259,6 +328,8 @@ class BackupService : Service() {
 
         private const val POLL_MS = 3000L
         private const val CONNECT_TIMEOUT_MS = 2 * 60 * 1000L
+        /** Not connected after this long: try the address from the app instead of the server's. */
+        private const val ADDRESS_FALLBACK_MS = 40 * 1000L
         /** How long to wait for the server to start a backup after connecting. */
         private const val IDLE_AFTER_CONNECT_MS = 2 * 60 * 1000L
         /** The server may start another backup (e.g. a different group) right after one finished. */

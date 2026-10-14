@@ -33,6 +33,21 @@ object BackupState {
             .apply()
     }
 
+    /** A problem that needs the user's (or the server admin's) attention. Empty clears it. */
+    fun setWarning(context: Context, message: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("warning", message).apply()
+        _warning.value = message
+    }
+
+    private val _warning = MutableStateFlow<String?>(null)
+
+    fun warning(context: Context): StateFlow<String?> {
+        if (_warning.value == null) {
+            _warning.value = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("warning", "")
+        }
+        return _warning.asStateFlow()
+    }
+
     fun lastResult(context: Context): Pair<String, Long> {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return Pair(p.getString("last_result", "")!!, p.getLong("last_result_time", 0))

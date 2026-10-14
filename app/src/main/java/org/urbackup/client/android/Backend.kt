@@ -31,6 +31,13 @@ class Backend(private val context: Context) {
         }
     }
 
+    /** A value from the backend's settings.cfg (the backend reads it into a map, so the last line wins). */
+    fun setting(key: String): String? {
+        val f = File(dataDir, "settings.cfg")
+        if (!f.exists()) return null
+        return f.readLines().lastOrNull { it.startsWith("$key=") }?.substringAfter('=')
+    }
+
     fun start(): Process {
         prepare()
         val cmd = listOf(
