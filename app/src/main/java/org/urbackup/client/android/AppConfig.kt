@@ -33,6 +33,9 @@ data class AppConfig(
 
         fun storageRoot(): String = Environment.getExternalStorageDirectory().absolutePath
 
+        /** Folders are stored relative to the storage root unless they are absolute. */
+        fun absolutePath(folder: String): String = if (folder.startsWith("/")) folder else "${storageRoot()}/$folder"
+
         fun load(context: Context): AppConfig {
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             return AppConfig(

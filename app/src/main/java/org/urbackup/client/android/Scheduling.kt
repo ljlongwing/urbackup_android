@@ -10,6 +10,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
 
 /** Periodically starts a backup session. Whether a backup actually runs is up to the server. */
@@ -23,7 +25,8 @@ class SessionWorker(context: Context, params: WorkerParameters) : Worker(context
             Log.w("UrBackup", "session start not allowed", e)
             BackupState.setLastResult(
                 applicationContext,
-                "A scheduled backup could not start. Allow UrBackup to run in the background (battery settings)."
+                "A scheduled backup could not start. Allow UrBackup to run in the background (battery settings).",
+                ok = false,
             )
         }
         return Result.success()
@@ -32,6 +35,12 @@ class SessionWorker(context: Context, params: WorkerParameters) : Worker(context
 
 object Scheduling {
     private const val WORK_NAME = "session"
+
+    /** When WorkManager plans the next session (ms), null if nothing is scheduled. */
+    fun nextRun(context: Context): Flow<Long?> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(WORK_NAME).map { infos ->
+            infos.firstOrNull { !it.state.isFinished }?.nextScheduleTimeMillis?.takeIf { it != Long.MAX_VALUE }
+        }
 
     fun apply(context: Context) {
         val config = AppConfig.load(context)
