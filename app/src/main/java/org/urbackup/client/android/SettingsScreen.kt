@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -57,11 +58,23 @@ fun SettingsScreen(onBack: () -> Unit) {
         })
     }
     var folders by remember { mutableStateOf(saved.folders) }
-    var customFolder by remember { mutableStateOf("") }
+    var showPicker by remember { mutableStateOf(false) }
     var wifiOnly by remember { mutableStateOf(saved.wifiOnly) }
     var chargingOnly by remember { mutableStateOf(saved.chargingOnly) }
     var interval by remember { mutableIntStateOf(saved.intervalHours) }
     var message by remember { mutableStateOf("") }
+
+    if (showPicker) {
+        FolderPicker(
+            initial = folders,
+            onDone = {
+                folders = it
+                showPicker = false
+            },
+            onCancel = { showPicker = false }
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -105,32 +118,25 @@ fun SettingsScreen(onBack: () -> Unit) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Folders to back up", style = MaterialTheme.typography.titleMedium)
-                    val presets = AppConfig.PRESET_FOLDERS
-                    for (f in presets + folders.filter { it !in presets }) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .toggleable(f in folders, role = Role.Checkbox) { checked ->
-                                    folders = if (checked) folders + f else folders - f
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(f in folders, null)
-                            Text(f)
+                    if (folders.isEmpty()) {
+                        Text("No folders yet.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    for (f in folders) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(f.substringAfterLast('/'))
+                                if (f.contains('/')) {
+                                    Text(f, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            IconButton(onClick = { folders = folders - f }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Remove $f")
+                            }
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(customFolder, { customFolder = it }, label = { Text("Other folder") },
-                            singleLine = true, modifier = Modifier.weight(1f))
-                        Spacer(Modifier.width(8.dp))
-                        OutlinedButton(onClick = {
-                            val f = customFolder.trim().trimEnd('/')
-                            if (f.isNotEmpty() && f !in folders) folders = folders + f
-                            customFolder = ""
-                        }) { Text("Add") }
-                    }
+                    OutlinedButton(onClick = { showPicker = true }) { Text("Browse…") }
                     Text(
-                        "Other folders are relative to the phone's storage (e.g. WhatsApp/Media) or an absolute path.",
+                        "Photos from the camera are in DCIM, screenshots and images from other apps in Pictures.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

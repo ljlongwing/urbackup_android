@@ -239,8 +239,9 @@ private fun StatusCard(session: SessionState, history: History, nextRun: Long?, 
                 }
                 if (session.phase == Phase.BACKING_UP) {
                     Text(Format.backupTitle(session.action), style = MaterialTheme.typography.titleSmall)
-                    if (session.percentDone >= 0) {
-                        val progress by animateFloatAsState(estimatedProgress(session), label = "progress")
+                    val shown = estimatedSession(session)
+                    if (shown.percentDone >= 0) {
+                        val progress by animateFloatAsState(shown.percentDone / 100f, label = "progress")
                         LinearProgressIndicator(
                             progress = { progress },
                             modifier = Modifier.fillMaxWidth()
@@ -248,7 +249,7 @@ private fun StatusCard(session: SessionState, history: History, nextRun: Long?, 
                     } else {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                     }
-                    Text(Format.progressLine(session))
+                    Text(Format.progressLine(shown))
                 }
                 if (session.phase == Phase.CONNECTED) {
                     Text(
@@ -304,13 +305,14 @@ private fun StatusCard(session: SessionState, history: History, nextRun: Long?, 
 }
 
 /**
- * The server reports progress about every 10s. In between, move the bar on at the measured speed,
- * but at most about one report interval ahead of the last real value.
+ * The server reports progress about every 10s. In between, count the transferred bytes (and with
+ * them the percentage and the bar) up at the measured speed, at most about one report interval
+ * ahead of the last real value. The shown value never goes backwards: if the estimate got ahead,
+ * it waits for the real progress to catch up.
  */
 @Composable
-private fun estimatedProgress(s: SessionState): Float {
-    val reported = s.percentDone / 100f
-    if (s.totalBytes <= 0 || s.doneBytes < 0 || s.speedBps <= 0 || s.doneBytesAt == 0L) return reported
+private fun estimatedSession(s: SessionState): SessionState {
+    if (s.totalBytes <= 0 || s.doneBytes < 0) return s
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(s.doneBytesAt) {
         while (true) {
@@ -318,9 +320,20 @@ private fun estimatedProgress(s: SessionState): Float {
             delay(250)
         }
     }
-    val elapsed = ((now - s.doneBytesAt).coerceAtLeast(0)).coerceAtMost(12_000)
-    val estimate = s.doneBytes + s.speedBps * elapsed / 1000
-    return (estimate / s.totalBytes).toFloat().coerceIn(reported, 1f)
+    var shownBytes by remember { mutableLongStateOf(0L) }
+    val estimate = if (s.speedBps > 0 && s.doneBytesAt != 0L) {
+        val elapsed = (now - s.doneBytesAt).coerceIn(0, 12_000)
+        (s.doneBytes + s.speedBps * elapsed / 1000).toLong()
+    } else {
+        s.doneBytes
+    }
+    // a new backup starts at 0 again
+    if (s.doneBytes < shownBytes / 2) shownBytes = 0
+    shownBytes = maxOf(shownBytes, s.doneBytes, estimate).coerceAtMost(s.totalBytes)
+    return s.copy(
+        doneBytes = shownBytes,
+        percentDone = maxOf(s.percentDone, (shownBytes * 100 / s.totalBytes).toInt()).coerceAtMost(100),
+    )
 }
 
 /** The folders that are backed up, what they contain and whether the last backup had them. */
