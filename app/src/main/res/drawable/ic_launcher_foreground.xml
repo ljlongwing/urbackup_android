@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder: a cloud with an up arrow. To be replaced by the UrBackup logo. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#2E6DB4"
+        android:pathData="M74,52c-1.2,-8 -8,-14 -16,-14c-6.4,0 -12,3.8 -14.6,9.4C37,48 32,53.4 32,60c0,6.6 5.4,12 12,12h29c5.5,0 10,-4.5 10,-10c0,-5.2 -4,-9.6 -9,-10z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,48l-9,9h6v9h6v-9h6z" />
+</vector>

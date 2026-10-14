@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.kotlin/
+captures/
+*.keystore
+# built by scripts/build_backend.sh
+app/src/main/jniLibs/
+backend-build/
