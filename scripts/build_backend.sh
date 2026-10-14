@@ -29,6 +29,11 @@ for ABI in "${ABIS[@]}"; do
 
 	B="$ROOT/backend-build/$ABI"
 	echo "Building backend for $ABI in $B"
+	# a build folder can only be used for the source it was configured for
+	if [ -f "$B/CMakeCache.txt" ] && ! grep -q "^CMAKE_HOME_DIRECTORY:INTERNAL=$SRC\$" "$B/CMakeCache.txt"; then
+		echo "Build folder was configured for another source, starting over"
+		rm -rf "$B"
+	fi
 
 	# libc++ removed std::auto_ptr (C++17), which the backend still uses
 	# (cmake/toolchains/zig.cmake in the backend does the same)
