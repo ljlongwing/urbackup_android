@@ -102,6 +102,10 @@ class BackupService : Service() {
             var requestAttempts = 0
             var lastRequestAt = 0L
             var requestFailed = false
+            // done_bytes only changes about every 10s (the server's status pings)
+            var lastDone = -1L
+            var lastDoneAt = 0L
+            var measuredBps = 0.0
 
             while (!stopRequested) {
                 if (!p.isAlive) {
@@ -154,6 +158,24 @@ class BackupService : Service() {
                         sawBackup = true
                         lastActivity = now
                         backupRequested = false
+                        val done = proc.optLong("done_bytes", -1)
+                        if (done < 0) {
+                            // still preparing; the transfer starts after this, so the first update can
+                            // already give a rough speed
+                            lastDone = 0
+                            lastDoneAt = now
+                        } else if (done != lastDone) {
+                            if (lastDone in 0 until done && now > lastDoneAt) {
+                                val bps = (done - lastDone) * 1000.0 / (now - lastDoneAt)
+                                measuredBps = if (measuredBps > 0) (measuredBps + bps) / 2 else bps
+                            }
+                            lastDone = done
+                            lastDoneAt = now
+                        }
+                    } else {
+                        lastDone = -1
+                        lastDoneAt = 0
+                        measuredBps = 0.0
                     }
 
                     // a small backup can be over between two polls; it then shows up as finished
@@ -215,7 +237,8 @@ class BackupService : Service() {
                         percentDone = proc?.optInt("percent_done", -1) ?: -1,
                         doneBytes = proc?.optLong("done_bytes", -1) ?: -1,
                         totalBytes = proc?.optLong("total_bytes", -1) ?: -1,
-                        speedBpms = proc?.optDouble("speed_bpms", 0.0) ?: 0.0,
+                        speedBps = (proc?.optDouble("speed_bpms", 0.0) ?: 0.0).let { if (it > 0) it * 1000 else measuredBps },
+                        doneBytesAt = lastDoneAt,
                         etaMs = proc?.optLong("eta_ms", -1) ?: -1,
                         stayConnectedUntil = stayConnectedUntil,
                         backupDone = sawBackup && proc == null,

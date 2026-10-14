@@ -29,8 +29,13 @@ data class SessionState(
     val percentDone: Int = -1,
     val doneBytes: Long = -1,
     val totalBytes: Long = -1,
-    /** Bytes per millisecond. */
-    val speedBpms: Double = 0.0,
+    /**
+     * Bytes per second. The server's figure if it has one (it averages over a longer time, so short
+     * backups never get one), otherwise measured from the done_bytes updates.
+     */
+    val speedBps: Double = 0.0,
+    /** When doneBytes last changed; the progress bar moves on from there at [speedBps]. */
+    val doneBytesAt: Long = 0,
     val etaMs: Long = -1,
     val stayConnectedUntil: Long = 0,
     /** A backup ran in this session and is over; the session only waits a bit before it ends. */

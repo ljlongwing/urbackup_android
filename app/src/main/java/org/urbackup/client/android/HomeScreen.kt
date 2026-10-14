@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -239,8 +240,9 @@ private fun StatusCard(session: SessionState, history: History, nextRun: Long?, 
                 if (session.phase == Phase.BACKING_UP) {
                     Text(Format.backupTitle(session.action), style = MaterialTheme.typography.titleSmall)
                     if (session.percentDone >= 0) {
+                        val progress by animateFloatAsState(estimatedProgress(session), label = "progress")
                         LinearProgressIndicator(
-                            progress = { session.percentDone / 100f },
+                            progress = { progress },
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
@@ -299,6 +301,26 @@ private fun StatusCard(session: SessionState, history: History, nextRun: Long?, 
             }
         }
     }
+}
+
+/**
+ * The server reports progress about every 10s. In between, move the bar on at the measured speed,
+ * but at most about one report interval ahead of the last real value.
+ */
+@Composable
+private fun estimatedProgress(s: SessionState): Float {
+    val reported = s.percentDone / 100f
+    if (s.totalBytes <= 0 || s.doneBytes < 0 || s.speedBps <= 0 || s.doneBytesAt == 0L) return reported
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(s.doneBytesAt) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(250)
+        }
+    }
+    val elapsed = ((now - s.doneBytesAt).coerceAtLeast(0)).coerceAtMost(12_000)
+    val estimate = s.doneBytes + s.speedBps * elapsed / 1000
+    return (estimate / s.totalBytes).toFloat().coerceIn(reported, 1f)
 }
 
 /** The folders that are backed up, what they contain and whether the last backup had them. */

@@ -33,11 +33,12 @@ object Format {
         if (s.percentDone < 0) return "Preparing the file list…"
         val parts = mutableListOf("${s.percentDone}%")
         if (s.totalBytes > 0 && s.doneBytes >= 0) parts += "${bytes(s.doneBytes)} of ${bytes(s.totalBytes)}"
-        val bytesPerSecond = s.speedBpms * 1000
+        val bytesPerSecond = s.speedBps
         if (bytesPerSecond > 0) parts += "${bytes(bytesPerSecond.toLong())}/s"
+        // the server rounds its estimate up to at least 61s, so prefer our own when the speed is known
         val leftMs = when {
-            s.etaMs > 0 -> s.etaMs
             bytesPerSecond > 0 && s.totalBytes > s.doneBytes -> ((s.totalBytes - s.doneBytes) / bytesPerSecond * 1000).toLong()
+            s.etaMs > 0 -> s.etaMs
             else -> -1
         }
         if (leftMs > 0) parts += "about ${duration(leftMs)} left"
